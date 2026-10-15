@@ -23,8 +23,8 @@ from common.db import db_conn, replay_events
 RISK_COLOR = {"low": "green", "med": "yellow", "high": "red"}
 
 
-async def list_threads() -> None:
-    console = Console()
+async def recent_threads(limit: int = 25) -> list[dict]:
+    """Return recent review sessions as plain dicts — used by app.py's sidebar."""
     async with db_conn() as conn:
         async with conn.execute(
             """
@@ -37,10 +37,17 @@ async def list_threads() -> None:
               FROM audit_events
              GROUP BY thread_id, pr_url
              ORDER BY MAX(timestamp) DESC
-             LIMIT 25
-            """
+             LIMIT ?
+            """,
+            (limit,),
         ) as cur:
             rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def list_threads() -> None:
+    console = Console()
+    rows = await recent_threads()
 
     table = Table(title="Recent review sessions")
     for col in ("thread_id", "pr_url", "started", "last_event", "worst_risk", "events"):
