@@ -43,7 +43,11 @@ def node_analyze(state):
     with console.status("[dim]LLM reviewing the diff...[/dim]"):
         analysis = llm.invoke([
             {"role": "system", "content": (
-                "Senior reviewer. Structured output. "
+                "Senior reviewer. Structured output. Rate confidence strictly: only go "
+                "above 85% for trivial, low-risk changes you fully understand. Drop "
+                "confidence below 60% when you spot security issues (weak hashing, "
+                "plaintext secrets, injection, hard-coded credentials), missing tests "
+                "for risky logic, or intent you cannot verify from the diff alone. "
                 "If your confidence is below 60%, populate escalation_questions with "
                 "2 to 4 specific, context-rich questions for a human reviewer — each "
                 "one should reference the exact file or section of the diff it concerns."

@@ -43,7 +43,13 @@ def node_analyze(state: ReviewState) -> dict:
     llm = get_llm().with_structured_output(PRAnalysis)
     with console.status("[dim]LLM reviewing the diff...[/dim]"):
         analysis = llm.invoke([
-            {"role": "system", "content": "Senior reviewer. Structured output."},
+            {"role": "system", "content": (
+                "Senior reviewer. Structured output. Rate confidence strictly: only go "
+                "above 85% for trivial, low-risk changes you fully understand. Drop "
+                "confidence below 60% when you spot security issues (weak hashing, "
+                "plaintext secrets, injection, hard-coded credentials), missing tests "
+                "for risky logic, or intent you cannot verify from the diff alone."
+            )},
             {"role": "user", "content": f"Title: {state['pr_title']}\nDiff:\n{state['pr_diff']}"},
         ])
     console.print(f"  [green]✓[/green] confidence={analysis.confidence:.0%}, {len(analysis.comments)} comment(s)")

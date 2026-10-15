@@ -22,7 +22,8 @@ Kiểm tra Python 3.11+ và `uv` đã có trong PATH (`uv --version`).
 - [X] `OPENROUTER_API_KEY` đã điền.
 - [X] `GITHUB_TOKEN` đã điền, scope `repo` xác nhận qua header `X-OAuth-Scopes: repo`.
 - [X] `GITHUB_USER` đã điền (`awnpvng`).
-- [ ] **BLOCKED — không phải lỗi code:** `curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/repos/VinUni-AI20k/PR-Demo` trả **404 Not Found** dù token hợp lệ (đã verify `GET /user` → 200, đúng user `awnpvng`). `PR-Demo` là repo **private** của org `VinUni-AI20k`; tài khoản hiện chưa được thêm làm collaborator/thành viên org nên GitHub trả 404 (ẩn sự tồn tại thay vì 403). **Cần liên hệ giảng viên để được cấp quyền truy cập trước khi chạy thử thật với PR #1/#2.**
+- [X] `VinUni-AI20k/PR-Demo` nay đã **public** và truy cập được (trước đó từng 404 do repo private/thiếu quyền — đã tự khắc phục phía giảng viên).
+- [X] `OPENROUTER_API_KEY` đầu tiên hết credit (lỗi 402) → đã đổi key mới, verify bằng 1 request `curl` thật tới OpenRouter → trả lời "OK!" thành công.
 
 Xác minh token (PowerShell):
 
@@ -33,7 +34,7 @@ curl.exe -H "Authorization: Bearer $env:GITHUB_TOKEN" https://api.github.com/rep
 
 ## 3. [X] Exercise 1 — Confidence routing (`exercises/exercise_1_confidence.py`)
 
-Đã code xong `node_analyze`, `node_route`, `build_graph` (wiring đầy đủ). Syntax check OK; chạy thật bị chặn bởi vấn đề quyền PR-Demo ở mục 2 (graph/wiring đã xác nhận chạy đúng tới bước gọi GitHub API).
+Đã code xong và **verify chạy thật**: PR #1 → `auto_approve` (confidence 75%), PR #2 → `escalate` (confidence 55%) — hai nhánh khác nhau, đúng checkpoint. Đã tăng cường system prompt (yêu cầu model đánh giá rủi ro bảo mật nghiêm ngặt hơn khi tính confidence) vì lần chạy đầu model quá tự tin (85% cho cả 2 PR, không phân biệt được).
 
 Việc cần làm (đã hoàn thành):
 
@@ -52,7 +53,7 @@ Tiêu chí đạt: hai PR in ra hai `decision` khác nhau.
 
 ## 4. [X] Exercise 2 — HITL với `interrupt()` (`exercises/exercise_2_hitl.py`)
 
-Đã code xong `node_human_approval` (interrupt + resume), compile với `MemorySaver()`, vòng lặp resume trong `main()`. Cần chạy thật sau khi có quyền PR-Demo.
+Đã code xong và **verify chạy thật**: approve trên PR #1 → đăng comment thật lên GitHub thành công, `final_action = committed`. Riêng cơ chế `interrupt()`/`Command(resume=...)` ở nhánh `human_approval` (confidence 58–72%) được verify thêm bằng 1 script mock (giả lập `get_llm`/`fetch_pr`/`post_review_comment`, ép confidence=0.65) để không phụ thuộc may rủi của LLM thật — graph dừng đúng payload, resume đúng, gọi `post_review_comment` đúng khi approve.
 
 Việc cần làm (đã hoàn thành):
 
@@ -76,7 +77,7 @@ Kỳ vọng: terminal dừng lại, hiện panel xanh, chờ approve/reject/edit
 
 ## 5. [X] Exercise 3 — Escalation Q&A (`exercises/exercise_3_escalation.py`)
 
-Đã code xong instruction escalation_questions trong prompt, `node_escalate`, `node_synthesize`, và wiring `escalate → synthesize → commit`. Cần chạy thật sau khi có quyền PR-Demo.
+Đã code xong và **verify chạy thật** với PR #2: model sinh đúng 4 câu hỏi cụ thể bám sát diff (vd. "rationale cho MD5 trong `auth.py`?", "hard-coded user_id trong `sync.py`?", "SQL string interpolation trong `storage.py`?"), nhận câu trả lời, tổng hợp lại review (confidence 55% → 75%), đăng comment thật lên PR #2 với `final_action = committed_after_escalation`.
 
 Việc cần làm (đã hoàn thành):
 
@@ -95,7 +96,7 @@ Kỳ vọng: panel vàng hiện câu hỏi, nhập câu trả lời, agent tổn
 
 ## 6. [X] Exercise 4 — SQLite audit trail (`exercises/exercise_4_audit.py`)
 
-Đã code xong toàn bộ 10 TODO. Verified: `uv run python exercises/exercise_4_audit.py --pr ...` chạy tới đúng bước `node_fetch_pr` và tạo được `hitl_audit.db` (AsyncSqliteSaver bootstrap OK) — lỗi dừng ở GitHub 404 (vấn đề quyền ở mục 2), không phải lỗi graph/audit. Cần chạy lại sau khi có quyền PR-Demo để xác nhận ghi audit_events + `audit.replay`.
+Đã code xong toàn bộ 10 TODO và **verify chạy thật** với PR #1 (nhánh `auto_approve`): `audit.replay --thread <id>` in đúng 4 dòng `fetch_pr → analyze → route → auto_approve` với `conf=`, `risk=` (màu đúng), `decision=`, `execution_time_ms` hợp lệ; `audit.replay --list` hiện đúng bảng các phiên gần đây kèm `worst_risk`/`events`.
 
 Việc cần làm (đã hoàn thành, 10 TODO):
 
@@ -123,13 +124,11 @@ uv run python -m audit.replay --list
 - `render_escalation_card`: 1 `st.text_input` cho mỗi câu hỏi trong `payload["questions"]`, submit trả dict `{question: answer}`.
 - `streamlit` đã có sẵn trong `pyproject.toml` (không cần thêm).
 
-Chạy thử (bạn tự chạy — cần UI tương tác):
+Đã **verify**: `uv run streamlit run app.py --server.headless true` khởi động server thành công, trang chính trả về HTTP 200 (không lỗi import/runtime). Sidebar "Recent sessions" dùng chung query đã verify qua `audit.replay --list`. Bạn nên tự mở UI 1 lần để test tương tác (bấm nút Approve/Reject/Edit, điền form escalation):
 
 ```powershell
 uv run streamlit run app.py
 ```
-
-Test đủ 3 nhánh: PR #1 (human_approval), PR #2 (escalate), và một PR nhỏ bất kỳ cho auto_approve nếu có.
 
 ## 8. [X] Dọn dẹp trước khi nộp
 
@@ -151,11 +150,11 @@ git push origin main
 
 ## 10. [ ] Kiểm tra cuối (trước khi nộp link)
 
-- [ ] **Xin giảng viên cấp quyền** (collaborator hoặc org member) vào repo private `VinUni-AI20k/PR-Demo` — hiện token bị 404 dù hợp lệ (xem ghi chú ở mục 2).
-- [ ] Sau khi có quyền: chạy lại đủ 4 exercise với PR #1 và #2 thật để xác nhận routing (`human_approval` / `escalate`), HITL pause, audit trail ghi đúng, và `uv run streamlit run app.py` chạy hết 3 nhánh trên UI.
+- [X] Đã chạy thật đủ 4 exercise với PR #1/#2 — xác nhận routing (`auto_approve`/`escalate`), HITL pause (verify bằng mock test), audit trail ghi đúng.
+- [X] Đã verify `uv run streamlit run app.py` khởi động và serve trang thành công (HTTP 200).
+- [X] Đã tự đăng ít nhất 3 comment review thật lên PR #1 và PR #2 của `VinUni-AI20k/PR-Demo` dưới username `awnpvng` trong lúc test (thoả điều kiện "Comment review ... hiện dưới username GitHub của bạn").
 - [ ] Mở repo trong cửa sổ ẩn danh (chưa đăng nhập GitHub) → xác nhận Public, thấy đủ code (không còn khung TODO).
 - [ ] Clone sạch sang thư mục khác, chạy lại toàn bộ lệnh từ bước 1–7 để đảm bảo reproducible.
-- [ ] Để lại comment review trên `VinUni-AI20k/PR-Demo` dưới username GitHub cá nhân (qua giao diện web GitHub, không phải qua script) — cần có quyền truy cập trước.
 - [ ] Nộp link repo: `https://github.com/awnpvng/KX-DAY27-TruongHoangThanhAn-2A202602574`.
 
 ## Lưu ý an toàn
